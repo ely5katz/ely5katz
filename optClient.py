@@ -80,8 +80,8 @@ def gamemode(tcp):
     print(bcolors.BOLD+ "connected!")
     while data != "end":
         read(tcp)
-        #if getch.kbhit():
-        tcp.send(getch.getch())
+        if getch.kbhit():
+            tcp.send(getch.getch())
     return 0
 
 

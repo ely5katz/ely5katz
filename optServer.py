@@ -47,8 +47,10 @@ def opentcpcon():
 
 
 def MODE_OFFER():
+
     ip = get_ip()
     UDP_PORT = 14001#13117
+
     MESSAGE = 'Server started, listening on IP address'
 
     port1 = -1
@@ -70,7 +72,7 @@ def MODE_OFFER():
         PORT_TO_SEND = port1.to_bytes(2, 'little')
         SEND_PACKET = b'\xab\xcd' + b'\xdc\xba\x02' + PORT_TO_SEND
         while True:
-            s_udp.sendto(SEND_PACKET, ('255.255.255.255', UDP_PORT))
+            s_udp.sendto(SEND_PACKET, ('255.255.255.0', UDP_PORT))
             try:
                 (conn, addr) = tcp_1.accept()
                 
