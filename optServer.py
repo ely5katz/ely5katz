@@ -5,6 +5,8 @@
 from random import randint
 from socket import *
 import time
+import scapy.all as S
+import threading
 
 
 
@@ -33,9 +35,11 @@ def opentcpcon():
     try:
         s_tcp1 = socket(AF_INET, SOCK_STREAM)
         s_tcp1.setblocking(0)
-        s_tcp1.bind((gethostname(), 0))
+        #gethostname() insted of the ip addres im puthing
+        s_tcp1.bind((get_ip(), 0))
         SIGN_PORT = s_tcp1.getsockname()[1]
-        s_tcp1.listen(2)
+        #todo change for listen 2
+        s_tcp1.listen(1)
         return SIGN_PORT, s_tcp1
     except Exception as e:
         print(e)
@@ -43,22 +47,25 @@ def opentcpcon():
 
 
 def MODE_OFFER():
-    UDP_IP = '127.0.0.4'
-    UDP_PORT = 13117
+    ip = get_ip()
+    UDP_PORT = 14001#13117
     MESSAGE = 'Server started, listening on IP address'
 
     port1 = -1
     tcp_1 = socket(AF_INET, SOCK_STREAM)
     while port1 == -1:
         (port1, tcp_1) = opentcpcon()
+
     conn1 = 0
     conn2 = 0
     name1 = 'n1'
     name2 = 'n2'
     try:
+        
         s_udp = socket(AF_INET, SOCK_DGRAM)
-        print(f'Server started, listening on IP address {UDP_IP}')
+        print(f'Server started, listening on IP address {ip}')
         s_udp.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
+        
 
         PORT_TO_SEND = port1.to_bytes(2, 'little')
         SEND_PACKET = b'\xab\xcd' + b'\xdc\xba\x02' + PORT_TO_SEND
@@ -66,14 +73,15 @@ def MODE_OFFER():
             s_udp.sendto(SEND_PACKET, ('255.255.255.255', UDP_PORT))
             try:
                 (conn, addr) = tcp_1.accept()
+                
                 if conn1 == 0:
                     conn1 = conn
                     print("player 1 connected")
-                    name1 = str(get_input_from_player(conn1), 'utf-8')
+                    threading.Thread(target=hendelClient, args=(conn1,)).start()
                 elif conn2 == 0:
                     conn2 = conn
                     print("player 2 connected")
-                    name2 = str(get_input_from_player(conn2), 'utf-8')
+                    threading.Thread(target=hendelClient, args=(conn2,)).start()
                     s_udp.close()
                     tcp_1.close()
                     break
@@ -85,6 +93,13 @@ def MODE_OFFER():
     (q, a) = getQA()
     gamemode(conn1, conn2, name1, name2, q, a)
 
+def get_ip():
+    try:
+        ip = S.get_if_addr("eth0")
+    except Exception as e:
+        print(e)
+    return ip
+
 
 def get_input_from_player(t):
     try:
@@ -92,42 +107,56 @@ def get_input_from_player(t):
     except:
         return ""
 
+def hendelClient(socket):
+    #
+    return
 
 def gamemode(t1, t2, name1, name2, problem, ans):
+    
     # time.sleep(10)
     winner = "draw"
     welcome_message = f'Welcome to Quick Maths.  \nPlayer 1: {name1} \nPlayer 2: {name2} \n== \nPlease answer the ' \
                       f'following question as fast as you can: '
     problem = welcome_message + " " + problem
-    t1.send(bytes(problem, 'utf-8'))
-    t2.send(bytes(problem, 'utf-8'))
+    t1.sendall(problem.encode("ascii"))
+    #t1.send(bytes(problem, 'utf-8'))
+    print("sent 1")
+    #t2.send(bytes(problem, 'utf-8'))
+    t2.sendall(problem.encode("ascii"))
+    print("sent 2")
+    '''
     t = time.time()
     t1.setblocking(0)
-    t2.setblocking(0)
-    while time.time() - t < 10:
-        p1 = get_input_from_player(t1)
-        p2 = get_input_from_player(t2)
-        if p1 != "":
-            p1 = str(p1, 'utf-8')
-            print(p1)
-        if p2 != "":
-            p2 = str(p2, 'utf-8')
-            print(p2)
-        if p1 == ans:
-            winner = name1
-            break
-        elif p2 == ans:
-            winner = name2
-            break
-        elif p1 != "":
-            winner = name2
-            break
-        elif p2 != "":
-            winner = name1
-            break
+    #t2.setblocking(0)
+    print("after blocking")
+    #while time.time() - t < 10:
+    p1 = get_input_from_player(t1)
+    p2 = get_input_from_player(t2)
+    if p1 != "":
+        p1 = str(p1, 'utf-8')
+        print(p1)
+    if p2 != "":
+        p2 = str(p2, 'utf-8')
+        print(p2)
+    if p1 == ans:
+        winner = name1
+        #break
+    elif p2 == ans:
+        winner = name2
+        #break
+    elif p1 != "":
+        winner = name2
+        #break
+    elif p2 != "":
+        winner = name1
+        #break
+    '''
     end_message = f'Game over! \nThe correct answer was {ans}! \nCongratulations to the winner: {winner}'
+    print("start sending")
     t1.send(bytes(end_message, 'utf-8'))
+    print("send 1")
     t2.send(bytes(end_message, 'utf-8'))
+    print("send 2")
     t1.close()
     t2.close()
     print("“Game over, sending out offer\nrequests...”")

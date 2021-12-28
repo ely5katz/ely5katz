@@ -2,9 +2,10 @@
 
 # Press Shift+F10 to execute it or replace it with your code.
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-import msvcrt
+import getch
 import sys
 from socket import *
+import threading
 
 TEAMNAME = 'IN'
 TXT_ENCODING = 'utf-8'
@@ -16,7 +17,7 @@ FAILED_TO_CONNECT_MSG = 'Failed to connect'
 MAGIC_COOKIE = b'\xab\xcd\xdc\xba'
 MSG_TYPE_OFFER = b'\x02'
 BUFFER_SIZE = 1024
-UDP_PORT = 13117
+UDP_PORT = 14001#13117
 
 
 class bcolors:
@@ -40,6 +41,7 @@ def looking_for_server_state():
         m = s.recvfrom(BUFFER_SIZE)
         receivedbytes = m[0]
         serverip = m[1][0]
+        print(serverip)
         if receivedbytes[0:5] == b'\xab\xcd\xdc\xba\x02':
             receivedport = int.from_bytes(receivedbytes[5:7], NUM_ENCODING)
             print(RCVD_OFFER_MSG.format(serverip))
@@ -78,13 +80,15 @@ def gamemode(tcp):
     print(bcolors.BOLD+ "connected!")
     while data != "end":
         read(tcp)
-        if msvcrt.kbhit():
-            tcp.send(msvcrt.getwch())
+        #if getch.kbhit():
+        tcp.send(getch.getch())
     return 0
 
 
 def theloop():
     (serverip, port) = looking_for_server_state()
+    print(serverip)
+    print(port)
     tcpsocket = connect_to_server_state(serverip, port)
     if tcpsocket == None:
         print(bcolors.WARNING+FAILED_TO_CONNECT_MSG)
@@ -94,6 +98,45 @@ def theloop():
         gamemode(tcpsocket)
 
 
+'''
+def multi_gamemode_senddata(sock):
+    try:
+        while True:
+            data = getch.getch()
+            sock.send(data)
+    except Exception as e:
+        print(e)
+    pass
+
+def multi_gamemode_downloaddata(sock):
+    try:
+        while True:
+            data = sock.recv(BUFFER_SIZE)
+            if data != "":
+                print(data.decode("ascii"))
+    except Exception as e:
+        print(e)
+    pass
+
+
+def theloop():
+    (serverip, port) = looking_for_server_state()
+    tcpsocket = connect_to_server_state(serverip, port)
+    if tcpsocket == None:
+        print(bcolors.WARNING + FAILED_TO_CONNECT_MSG)
+        theloop()
+    else:
+        print("connected")
+        #tcpsocket.send(bytes(TEAMNAME, TXT_ENCODING))
+        TEAMNAME.encode("ascii")
+        downloading = threading.Thread(target=multi_gamemode_downloaddata, args=(tcpsocket,))
+        uploading = threading.Thread(target=multi_gamemode_senddata, args=(tcpsocket,))
+        downloading.start()
+        uploading.start()
+        #downloading.join()
+        #uploading.join()
+        #theloop()
+        '''
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     theloop()
