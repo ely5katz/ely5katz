@@ -2,7 +2,7 @@
 
 # Press Shift+F10 to execute it or replace it with your code.
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-import msvcrt
+import getch
 import sys
 from socket import *
 
@@ -16,7 +16,7 @@ FAILED_TO_CONNECT_MSG = 'Failed to connect'
 MAGIC_COOKIE = b'\xab\xcd\xdc\xba'
 MSG_TYPE_OFFER = b'\x02'
 BUFFER_SIZE = 1024
-UDP_PORT = 13117
+UDP_PORT = 14001#13117
 
 
 class bcolors:
@@ -78,8 +78,8 @@ def gamemode(tcp):
     print(bcolors.BOLD+ "connected!")
     while data != "end":
         read(tcp)
-        if msvcrt.kbhit():
-            tcp.send(msvcrt.getwch())
+        if getch.kbhit():
+            tcp.send(getch.getch())
     return 0
 
 
