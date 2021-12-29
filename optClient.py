@@ -1,24 +1,15 @@
-# This is a sample Python script.
-
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-import getch
-import sys
 from socket import *
-import threading
-
-TEAMNAME = 'IN'
-TXT_ENCODING = 'utf-8'
-NUM_ENCODING = "little"
-CLIENT_STARTED_MSG = 'Client started, listening for offer requests...'
-RCVD_OFFER_MSG = 'Received offer from {},\nattempting to connect...'
-IMPOSTER_OFFER_MSG = 'An imposter server ({})tried to connect, but it had failed.'
-FAILED_TO_CONNECT_MSG = 'Failed to connect'
-MAGIC_COOKIE = b'\xab\xcd\xdc\xba'
-MSG_TYPE_OFFER = b'\x02'
-BUFFER_SIZE = 1024
-UDP_PORT = 14001#13117
-
+import time
+import struct
+import getch
+from multiprocessing import Process, Value
+import psutil
+# import keyboard
+# CLIENT = gethostbyname(gethostname())
+CLIENT = '20.100.102.12'
+# broadcast port = udp port
+BROADCAST_PORT = 13117
+size = 1024
 
 class bcolors:
     HEADER = '\033[95m'
@@ -31,114 +22,60 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-
-def looking_for_server_state():
-    print(bcolors.OKBLUE+CLIENT_STARTED_MSG)
-    try:
-        s = socket(AF_INET, SOCK_DGRAM)
-        s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-        s.bind(('', UDP_PORT))
-        m = s.recvfrom(BUFFER_SIZE)
-        receivedbytes = m[0]
-        serverip = m[1][0]
-        print(serverip)
-        if receivedbytes[0:5] == b'\xab\xcd\xdc\xba\x02':
-            receivedport = int.from_bytes(receivedbytes[5:7], NUM_ENCODING)
-            print(RCVD_OFFER_MSG.format(serverip))
-            return serverip, receivedport
-        else:
-            print(IMPOSTER_OFFER_MSG.format(serverip))
-            return looking_for_server_state()
-    except Exception as e:
-        print(e)
-
-    return None, None
-
-
-def connect_to_server_state(serverip, port):
-    try:
-        s = socket(AF_INET, SOCK_STREAM)
-        s.connect((serverip, port))
-        return s
-    except Exception as e:
-        print(e)
-    return None
-
-
-def read(t):
-    try:
-        data = t.recv(BUFFER_SIZE)
-        if data != "":
-            data = str(data, TXT_ENCODING)
-            print(data)
-    except:
-        pass
-
-
-def gamemode(tcp):
-    data = ""
-    print(bcolors.BOLD+ "connected!")
-    while data != "end":
-        read(tcp)
-        if getch.kbhit():
-            tcp.send(getch.getch())
-    return 0
-
-
-def theloop():
-    (serverip, port) = looking_for_server_state()
-    print(serverip)
-    print(port)
-    tcpsocket = connect_to_server_state(serverip, port)
-    if tcpsocket == None:
-        print(bcolors.WARNING+FAILED_TO_CONNECT_MSG)
-        theloop()
-    else:
-        tcpsocket.send(bytes(TEAMNAME, TXT_ENCODING))
-        gamemode(tcpsocket)
-
-
-'''
-def multi_gamemode_senddata(sock):
-    try:
+class Client:
+    def __init__(self, team_name):
+        self.udp = socket(AF_INET, SOCK_DGRAM)
+        self.tcp = socket(AF_INET, SOCK_STREAM)
+        self.team_name = team_name
+    
+    def search_host(self):
+        self.udp.setsockopt(SOL_SOCKET, SO_REUSEPORT, 1)
+        self.udp.bind(('', BROADCAST_PORT))
+        print(bcolors.OKCYAN+'Client started, listening for offer requests...')
         while True:
-            data = getch.getch()
-            sock.send(data)
-    except Exception as e:
-        print(e)
-    pass
+            try:
+                message ,address = self.udp.recvfrom(size)
+                #print(address)
 
-def multi_gamemode_downloaddata(sock):
-    try:
-        while True:
-            data = sock.recv(BUFFER_SIZE)
-            if data != "":
-                print(data.decode("ascii"))
-    except Exception as e:
-        print(e)
-    pass
+        
+                data = struct.unpack('ii', message)
+                password = data[0]
+                port = data[1]
+                #print(password, port)
+            except:
+                continue
+            if password == 5810:
+                # We are about to play! let's connect to server.
+                print(bcolors.WARNING+f"Received offer from {address[0]}, attempting to connect...")
+                
+                self.tcp.connect((address[0], port))
+                self.tcp.send(f'{self.team_name}\n'.encode("ascii"))
+                self.play()
+           
+            time.sleep(1)
 
-
-def theloop():
-    (serverip, port) = looking_for_server_state()
-    tcpsocket = connect_to_server_state(serverip, port)
-    if tcpsocket == None:
-        print(bcolors.WARNING + FAILED_TO_CONNECT_MSG)
-        theloop()
-    else:
-        print("connected")
-        #tcpsocket.send(bytes(TEAMNAME, TXT_ENCODING))
-        TEAMNAME.encode("ascii")
-        downloading = threading.Thread(target=multi_gamemode_downloaddata, args=(tcpsocket,))
-        uploading = threading.Thread(target=multi_gamemode_senddata, args=(tcpsocket,))
-        downloading.start()
-        uploading.start()
-        #downloading.join()
-        #uploading.join()
-        #theloop()
-        '''
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    theloop()
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    def play(self):
+        p = Process(target= self.play_sync)
+        p.start()
+        winner_message = self.tcp.recv(size).decode()
+        while 'answered' not in winner_message or 'draw' not in winner_message:
+            winner_message = self.tcp.recv(size).decode()
+            time.sleep(0.5)
+        
+        print(winner_message)
+        p.terminate()
+        time.sleep(5)
+        client = Client("Rick&Rick cause we are both genius")
+        client.search_host()
+    
+    def play_sync(self):
+        while True:  
+            welcome_message = self.tcp.recv(size).decode()
+            if "welcome" in welcome_message.lower():
+                break
+        print(welcome_message)
+        key_press = getch.getch()
+        self.tcp.sendall(key_press.encode("ascii"))
+        
+client = Client("Rick&Rick cause we are both genius")
+client.search_host()
