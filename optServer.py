@@ -1,14 +1,15 @@
-# This is a sample Python script.
-
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-from random import randint
 from socket import *
+import sys
 import time
-import scapy.all as S
-import threading
+import struct
+import select
+import random
+from threading import Thread
+import scapy.all
 
-
+GAME_PORT = 2090 # THE IP WHERE THE GAME WILL TAKE PLACE
+BROADCASE_PORT = 13117 # THE IP WHERE BROADCASE IS HAPPENING
+UDP_PORT = 14001
 
 class bcolors:
     HEADER = '\033[95m'
@@ -21,153 +22,166 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-
-def getQA():
-    var = [("How much is 2 + 2?", "4"), ("How much is 2 + 3?", "5"),
-           ("How much is square root of 9?", "3"),("How much is square root of 81?", "9"),
-           ("How much blonde women you need to change a light bolb", "1"),
-           ("How much is 2 + 2 - 1?", "3"),("How much is 9 square of 0?", "1")]
-    value = randint(0, len(var) - 1)
-    return var[value]
-
-
-def opentcpcon():
+def get_ip(eth):
     try:
-        s_tcp1 = socket(AF_INET, SOCK_STREAM)
-        s_tcp1.setblocking(0)
-        #gethostname() insted of the ip addres im puthing
-        s_tcp1.bind((get_ip(), 0))
-        SIGN_PORT = s_tcp1.getsockname()[1]
-        #todo change for listen 2
-        s_tcp1.listen(1)
-        return SIGN_PORT, s_tcp1
-    except Exception as e:
-        print(e)
-        return -1, -1
+        if eth == 1:
+            ip = scapy.all.get_if_addr("eth1")
+            return ip 
+        if eth == 2:
+            ip = scapy.all.get_if_addr("eth2")
+            return ip
+    except : pass
+#HOST = gethostbyname(gethostname())
+HOST = get_ip(1)
 
+class Server:
+    def __init__(self):
+        self.udp = socket(AF_INET, SOCK_DGRAM)
+        self.udp.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
+        #self.udp.bind(('', UDP_PORT))
+        self.udp.bind((HOST, UDP_PORT))
 
-def MODE_OFFER():
-
-    ip = get_ip()
-    UDP_PORT = 14001#13117
-
-    MESSAGE = 'Server started, listening on IP address'
-
-    port1 = -1
-    tcp_1 = socket(AF_INET, SOCK_STREAM)
-    while port1 == -1:
-        (port1, tcp_1) = opentcpcon()
-
-    conn1 = 0
-    conn2 = 0
-    name1 = 'n1'
-    name2 = 'n2'
-    try:
+        self.tcp = socket(AF_INET, SOCK_STREAM)
+        self.tcp.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
+        self.tcp.bind(('', GAME_PORT))
+        self.tcp.listen(10)
         
-        s_udp = socket(AF_INET, SOCK_DGRAM)
-        print(f'Server started, listening on IP address {ip}')
-        s_udp.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
+        self.MAX_CONNECTIONS = 2 # 2 maximum players
+        self.team_sockets = []
+        self.team_names = {}
+        self.questions = [("What is Our hackathon grade divided by 50?", 2), ("How many pizza slices nizan can eat?", 8),
+        ("What is yossi's record of killing mosquitoes in a minute?", 4), ("from 0 to 9, how much you enjoyed our server?",9),
+        ("How many welcoming sockets there is on a client?", 0), ("4 * 8 * 9 * 21 * 0 * 3 * 4 + 5 ?", 5),("What is length of the answer to this qustion?", 1)]
+
+    def __broadcast(self):
+
         
-
-        PORT_TO_SEND = port1.to_bytes(2, 'little')
-        SEND_PACKET = b'\xab\xcd' + b'\xdc\xba\x02' + PORT_TO_SEND
-        while True:
-            s_udp.sendto(SEND_PACKET, ('255.255.255.0', UDP_PORT))
-            try:
-                (conn, addr) = tcp_1.accept()
-                
-                if conn1 == 0:
-                    conn1 = conn
-                    print("player 1 connected")
-                    threading.Thread(target=hendelClient, args=(conn1,)).start()
-                elif conn2 == 0:
-                    conn2 = conn
-                    print("player 2 connected")
-                    threading.Thread(target=hendelClient, args=(conn2,)).start()
-                    s_udp.close()
-                    tcp_1.close()
-                    break
-            except Exception as e:
-                time.sleep(1)
-
-    except Exception as e:
-        print(e)
-    (q, a) = getQA()
-    gamemode(conn1, conn2, name1, name2, q, a)
-
-def get_ip():
-    try:
-        ip = S.get_if_addr("eth0")
-    except Exception as e:
-        print(e)
-    return ip
-
-
-def get_input_from_player(t):
-    try:
-        return t.recv(1024)
-    except:
-        return ""
-
-def hendelClient(socket):
-    #
-    return
-
-def gamemode(t1, t2, name1, name2, problem, ans):
+        print(bcolors.OKCYAN+ f"Server started, listening on IP address {HOST}")
+        password = struct.pack('ii', 5810, GAME_PORT) # this is the password the verify it came from the right server
+        
+        while not self.__full(): # wait for MAX_CONNECTIONS to be filled 
+            
+            try: self.udp.sendto(password, ('<broadcast>', BROADCASE_PORT))
+            except: pass
+            time.sleep(1)
+                    
+    def __full(self):
+        self.__remove_disconnected()
+        return len(self.team_sockets) == self.MAX_CONNECTIONS 
     
-    # time.sleep(10)
-    winner = "draw"
-    welcome_message = f'Welcome to Quick Maths.  \nPlayer 1: {name1} \nPlayer 2: {name2} \n== \nPlease answer the ' \
-                      f'following question as fast as you can: '
-    problem = welcome_message + " " + problem
-    t1.sendall(problem.encode("ascii"))
-    #t1.send(bytes(problem, 'utf-8'))
-    print("sent 1")
-    #t2.send(bytes(problem, 'utf-8'))
-    t2.sendall(problem.encode("ascii"))
-    print("sent 2")
-    '''
-    t = time.time()
-    t1.setblocking(0)
-    #t2.setblocking(0)
-    print("after blocking")
-    #while time.time() - t < 10:
-    p1 = get_input_from_player(t1)
-    p2 = get_input_from_player(t2)
-    if p1 != "":
-        p1 = str(p1, 'utf-8')
-        print(p1)
-    if p2 != "":
-        p2 = str(p2, 'utf-8')
-        print(p2)
-    if p1 == ans:
-        winner = name1
-        #break
-    elif p2 == ans:
-        winner = name2
-        #break
-    elif p1 != "":
-        winner = name2
-        #break
-    elif p2 != "":
-        winner = name1
-        #break
-    '''
-    end_message = f'Game over! \nThe correct answer was {ans}! \nCongratulations to the winner: {winner}'
-    print("start sending")
-    t1.send(bytes(end_message, 'utf-8'))
-    print("send 1")
-    t2.send(bytes(end_message, 'utf-8'))
-    print("send 2")
-    t1.close()
-    t2.close()
-    print("“Game over, sending out offer\nrequests...”")
-    MODE_OFFER()
+    def __remove_disconnected(self):
+        
+        to_remove = []
+        for socket in self.team_sockets:
+            try:
+                socket.send("check".encode())
+            except:
+                to_remove.append(socket)
+                
+        for socket in to_remove:
+            print(bcolors.FAIL+f"Team {self.get_team_name(socket)} Disconnected") # PRINT TEAM NAME
+            del self.team_names[socket]
+            self.team_sockets.remove(socket)
+                
+    def get_team_name(self, socket):
+        return self.team_names[socket]
+         
+        
+    def __receive_teams(self):
+        while not self.__full():
+            try:
+                socket, address = self.tcp.accept()
+                if not self.__full():
+                    socket.setblocking(0)
+                    team_name = socket.recv(2048).decode()
+                    print(bcolors.OKBLUE+f"Team {team_name} Connected!")
+                    self.team_names[socket] = team_name
+                    self.team_sockets.append(socket)
+            except:
+                pass
+    
 
+            
+    def init_game(self):
+        broadcast_thread = Thread(target=self.__broadcast)
+        receive_thread = Thread(target=self.__receive_teams)
+        
+        broadcast_thread.start()
+        receive_thread.start()
+        
+        broadcast_thread.join()
+        receive_thread.join()
+        time.sleep(2)
+        if not self.__full():
+            print("Not enough players... waiting for new players")
+            self.init_game()
+        else:
+            self.__play()
+        
+    
+        
+        
+    
+    def __play(self):
+        global GAME_PORT
+        print()
+        welcome_message = bcolors.HEADER+'\nWelcome to Quick Maths.\n'
+        welcome_message += f'Player 1: {self.get_team_name(self.team_sockets[0])}'
+        welcome_message += f'Player 2: {self.get_team_name(self.team_sockets[1])}'
+        welcome_message += '==\n'
+        welcome_message += 'Please answer the following question as fast as you can:\n'
+        
+        queAns = random.choice(self.questions)
+        que = queAns[0]
+        ans = queAns[1]
+        welcome_message += '\n' + bcolors.OKCYAN+que + '\n'
+        # print(welcome_message)
+        for socket in self.team_sockets:
+            socket.sendall(welcome_message.encode())
+        flag = True 
+        while flag:
+            read_sockets, write_sockets, error_sockets = select.select([socket for socket in self.team_sockets], [], [], 10)
+            if len(read_sockets) == 0:
+                break
+            for socket in read_sockets:
+                answer = socket.recv(1024).decode()
+                try:
+                    if int(answer) == ans:
+                        winner = self.get_team_name(socket)
+                        ansone = winner
+                        flag = False
+                    else:
+                        for teamName in self.team_names.values():
+                            if teamName != self.get_team_name(socket):
+                                winner = teamName
+                                flag = False
+                            else:
+                                ansone = teamName
+                except:
+                    pass
+                
+            # answer = socket.recv(1024).decode()
+        if flag == True:
+            for socket in self.team_sockets:
+                socket.sendall(str(bcolors.OKGREEN+f"It's a draw \nThe correct answer was: {ans}").encode())
+        else:
+        # declare winner!
+            messi = ansone + f" answered first and his answer is {answer} \nThe corret answer is: {ans} \nThe winner is: {winner} \n"
+            for socket in self.team_sockets:
+                socket.sendall(str(bcolors.OKGREEN+messi).encode())
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    try:
-        MODE_OFFER()
-    except Exception as e:
-        print(e)
+        self.tcp.shutdown(1)
+        self.tcp.close()
+        self.udp.close()
+        ###
+        GAME_PORT = GAME_PORT+1
+        time.sleep(3)
+        server = Server()
+        server.init_game()
+                
+            
+      
+            
+
+server = Server()
+server.init_game()
