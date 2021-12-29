@@ -4,11 +4,13 @@ import struct
 import getch
 from multiprocessing import Process, Value
 import psutil
+import sys
+import select
 # import keyboard
 # CLIENT = gethostbyname(gethostname())
-CLIENT = '20.100.102.12'
+#CLIENT = '20.100.102.12'
 # broadcast port = udp port
-BROADCAST_PORT = 13117
+BROADCAST_PORT = 13119
 size = 1024
 
 class bcolors:
@@ -30,40 +32,58 @@ class Client:
     
     def search_host(self):
         self.udp.setsockopt(SOL_SOCKET, SO_REUSEPORT, 1)
-        self.udp.bind(('', BROADCAST_PORT))
+        self.udp.bind(('172.99.255.255', BROADCAST_PORT))
         print(bcolors.OKCYAN+'Client started, listening for offer requests...')
         while True:
+            
             try:
                 message ,address = self.udp.recvfrom(size)
+                
                 #print(address)
 
-        
-                data = struct.unpack('ii', message)
-                password = data[0]
-                port = data[1]
+                cookie, typ, port = struct.unpack('=IbH', message)
                 #print(password, port)
             except:
                 continue
-            if password == 5810:
-                # We are about to play! let's connect to server.
-                print(bcolors.WARNING+f"Received offer from {address[0]}, attempting to connect...")
-                
+                # We are about to play! let's connect to server.'''
+            print(bcolors.WARNING+f"Received offer from {address[0]}, attempting to connect...")
+            
+            try:
                 self.tcp.connect((address[0], port))
-                self.tcp.send(f'{self.team_name}\n'.encode("ascii"))
+                print("Connected!")
+                self.tcp.send(f'{self.team_name}\n'.encode())
                 self.play()
-           
-            time.sleep(1)
+            except: 
+                print(address[0], port)
+                client = Client("Rick&Rick cause we are both genius")
+                client.search_host()
 
     def play(self):
-        p = Process(target= self.play_sync)
-        p.start()
-        winner_message = self.tcp.recv(size).decode()
-        while 'answered' not in winner_message or 'draw' not in winner_message:
-            winner_message = self.tcp.recv(size).decode()
+        #p = Process(target= self.play_sync)
+        #p.start()
+        self.play_sync()
+        Flagos = True
+        while Flagos:
+            readable, writeable, _ = select.select([sys.stdin, self.tcp], [], [])
+            for r in readable:
+                if r is sys.stdin:
+                    writeable.append(self.tcp)
+                    msg = r.readline()
+                    Flagos = False
+                    break
+                if r is self.tcp:
+                    masi =  r.recv(size).decode()
+                    if masi != 'checked':
+                        print(masi)
+                        Flagos = False
+                        break
+            for w in writeable:
+                w.sendall(msg.encode())
             time.sleep(0.5)
+        winner_message = self.tcp.recv(size).decode()
         
         print(winner_message)
-        p.terminate()
+        #p.terminate()
         time.sleep(5)
         client = Client("Rick&Rick cause we are both genius")
         client.search_host()
@@ -74,8 +94,6 @@ class Client:
             if "welcome" in welcome_message.lower():
                 break
         print(welcome_message)
-        key_press = getch.getch()
-        self.tcp.sendall(key_press.encode("ascii"))
         
 client = Client("Rick&Rick cause we are both genius")
 client.search_host()
