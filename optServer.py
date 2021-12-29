@@ -7,8 +7,8 @@ import random
 from threading import Thread
 import scapy.all
 
-GAME_PORT = 2090 # THE IP WHERE THE GAME WILL TAKE PLACE
-BROADCASE_PORT = 13117 # THE IP WHERE BROADCASE IS HAPPENING
+GAME_PORT = 2095 # THE IP WHERE THE GAME WILL TAKE PLACE
+BROADCAST_PORT = 13119 # THE IP WHERE BROADCASE IS HAPPENING
 UDP_PORT = 14001
 
 class bcolors:
@@ -32,18 +32,17 @@ def get_ip(eth):
             return ip
     except : pass
 #HOST = gethostbyname(gethostname())
-HOST = get_ip(1)
+HOST = get_ip(2)
 
 class Server:
     def __init__(self):
         self.udp = socket(AF_INET, SOCK_DGRAM)
         self.udp.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
         #self.udp.bind(('', UDP_PORT))
-        self.udp.bind((HOST, UDP_PORT))
+        self.udp.bind((HOST, BROADCAST_PORT))
 
         self.tcp = socket(AF_INET, SOCK_STREAM)
-        self.tcp.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
-        self.tcp.bind(('', GAME_PORT))
+        self.tcp.bind((HOST, GAME_PORT))
         self.tcp.listen(10)
         
         self.MAX_CONNECTIONS = 2 # 2 maximum players
@@ -57,11 +56,11 @@ class Server:
 
         
         print(bcolors.OKCYAN+ f"Server started, listening on IP address {HOST}")
-        password = struct.pack('ii', 5810, GAME_PORT) # this is the password the verify it came from the right server
+        password = struct.pack('=IbH', 0xabcddcba, 0x2, GAME_PORT)
         
         while not self.__full(): # wait for MAX_CONNECTIONS to be filled 
             
-            try: self.udp.sendto(password, ('<broadcast>', BROADCASE_PORT))
+            try: self.udp.sendto(password, ('172.99.255.255', BROADCAST_PORT))
             except: pass
             time.sleep(1)
                     
